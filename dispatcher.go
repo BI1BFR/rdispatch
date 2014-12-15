@@ -7,10 +7,37 @@ import (
 )
 
 type RemoteDispatcher struct {
-	dispatch.Dispatcher
+	*dispatch.Dispatcher
 	adapter RemoteDispatcherAdapter
 }
 
-func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func NewRemoteDispatcher(d *dispatch.Dispatcher, adapter RemoteDispatcherAdapter) *RemoteDispatcher {
+	if adapter == nil {
+		adapter = &defaultDispatcherAdapter{}
+	}
 
+	return &RemoteDispatcher{
+		Dispatcher: d,
+		adapter:    adapter,
+	}
+}
+
+func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rr := d.adapter.ResolveRequest(r)
+
+	rs := func() dispatch.Response {
+		if rr == nil {
+			return ErrResponse(statusError{http.StatusBadRequest, ""})
+		}
+
+		if d.adapter.Method(r) == MethodSend {
+			err := d.Send(rr)
+			return ErrResponse(err)
+		}
+
+		// MethodCall TODO: TimeOut
+		return d.Call(dispatch.NewContext(), rr)
+	}()
+
+	d.adapter.WriteResponse(w, rs)
 }

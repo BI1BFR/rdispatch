@@ -10,14 +10,54 @@ import (
 	"github.com/huangml/dispatch"
 )
 
+type RemoteMethod int
+
+const (
+	MethodCall RemoteMethod = iota
+	MethodSend
+)
+
 type RemoteDispatcherAdapter interface {
-	ResolveRequest(*http.Request) dispatch.Request
+	Method(r *http.Request) RemoteMethod
+	ResolveRequest(r *http.Request) dispatch.Request
 	WriteResponse(w http.ResponseWriter, r dispatch.Response)
 }
 
 type RemoteDestAdapter interface {
 	BuildRequest(r dispatch.Request, addr, method string) *http.Request
-	ResolveResponse(*http.Response) dispatch.Response
+	ResolveResponse(r *http.Response) dispatch.Response
+}
+
+type defaultDispatcherAdapter struct{}
+
+func (d defaultDispatcherAdapter) Method(r *http.Request) RemoteMethod {
+	return parseMethodFromHTTP(r)
+}
+
+func (d defaultDispatcherAdapter) ResolveRequest(r *http.Request) dispatch.Request {
+	return ResolveRequest(r)
+}
+
+func (d defaultDispatcherAdapter) WriteResponse(w http.ResponseWriter, r dispatch.Response) {
+	WriteResponse(w, r)
+}
+
+type defaultDestAdapter struct{}
+
+func (d defaultDestAdapter) BuildRequest(r dispatch.Request, addr, method string) *http.Request {
+	return BuildRequest(r, addr, method)
+}
+
+func (d defaultDestAdapter) ResolveResponse(r *http.Response) dispatch.Response {
+	return ResolveResponse(r)
+}
+
+func parseMethodFromHTTP(r *http.Request) RemoteMethod {
+	if r.Method == "PUT" {
+		return MethodSend
+	} else {
+		return MethodCall
+	}
 }
 
 func ResolveRequest(r *http.Request) dispatch.Request {
@@ -62,14 +102,14 @@ func ResolveResponse(r *http.Response) dispatch.Response {
 	return &rsp
 }
 
-func BuildRequest(r dispatch.Request, url, method string) *http.Request {
+func BuildRequest(r dispatch.Request, addr, method string) *http.Request {
 	sink := r.Body()
 	if sink == nil {
-		req, _ := http.NewRequest(method, url, nil)
+		req, _ := http.NewRequest(method, addr, nil)
 		return req
 	}
 
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(sink.Bytes()))
+	req, err := http.NewRequest(method, addr, bytes.NewBuffer(sink.Bytes()))
 	if err != nil {
 		return nil
 	}
