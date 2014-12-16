@@ -24,7 +24,7 @@ type RemoteDispatcherAdapter interface {
 }
 
 type RemoteDestAdapter interface {
-	BuildRequest(r dispatch.Request, addr, method string) *http.Request
+	BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Request
 	ResolveResponse(r *http.Response) dispatch.Response
 }
 
@@ -44,7 +44,7 @@ func (d defaultDispatcherAdapter) WriteResponse(w http.ResponseWriter, r dispatc
 
 type defaultDestAdapter struct{}
 
-func (d defaultDestAdapter) BuildRequest(r dispatch.Request, addr, method string) *http.Request {
+func (d defaultDestAdapter) BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Request {
 	return BuildRequest(r, addr, method)
 }
 
@@ -102,14 +102,20 @@ func ResolveResponse(r *http.Response) dispatch.Response {
 	return &rsp
 }
 
-func BuildRequest(r dispatch.Request, addr, method string) *http.Request {
+func BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Request {
+
+	methodStr := "PUT"
+	if method == MethodSend {
+		methodStr = "POST"
+	}
+
 	sink := r.Body()
 	if sink == nil {
-		req, _ := http.NewRequest(method, addr, nil)
+		req, _ := http.NewRequest(methodStr, addr, nil)
 		return req
 	}
 
-	req, err := http.NewRequest(method, addr, bytes.NewBuffer(sink.Bytes()))
+	req, err := http.NewRequest(methodStr, addr, bytes.NewBuffer(sink.Bytes()))
 	if err != nil {
 		return nil
 	}
