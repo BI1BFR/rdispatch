@@ -62,12 +62,9 @@ func parseMethodFromHTTP(r *http.Request) RemoteMethod {
 
 func ResolveRequest(r *http.Request) dispatch.Request {
 	return &RemoteRequest{
-		SimpleRequest: dispatch.SimpleRequest{
-			Proto: r.RequestURI,
-			Sink:  parseSinkFromHTTP(r.Body, r.Header),
-		},
-		Auth:    parseAuthFromHTTP(r),
-		TimeOut: parseTimeOutFromHTTP(r),
+		SimpleRequest: dispatch.NewSimpleRequest(r.RequestURI, r.RequestURI, parseSinkFromHTTP(r.Body, r.Header)),
+		Auth:          parseAuthFromHTTP(r),
+		TimeOut:       parseTimeOutFromHTTP(r),
 	}
 }
 
@@ -89,17 +86,11 @@ func WriteResponse(w http.ResponseWriter, r dispatch.Response) {
 }
 
 func ResolveResponse(r *http.Response) dispatch.Response {
-	var rsp dispatch.SimpleResponse
-
-	if r.StatusCode != http.StatusOK {
-		rsp.Err = statusError{
-			statusCode: r.StatusCode,
-		}
+	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusAccepted {
+		return dispatch.NewSimpleResponse(nil, statusError{statusCode: r.StatusCode})
+	} else {
+		return dispatch.NewSimpleResponse(parseSinkFromHTTP(r.Body, r.Header), nil)
 	}
-
-	rsp.Sink = parseSinkFromHTTP(r.Body, r.Header)
-
-	return &rsp
 }
 
 func BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Request {

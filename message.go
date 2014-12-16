@@ -14,7 +14,7 @@ type Auth struct {
 }
 
 type RemoteRequest struct {
-	dispatch.SimpleRequest
+	*dispatch.SimpleRequest
 	*Auth
 	TimeOut time.Duration
 }
