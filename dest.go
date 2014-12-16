@@ -35,7 +35,7 @@ func (d *RemoteDest) doRemoteRequest(r dispatch.Request, method RemoteMethod) di
 	var client http.Client
 	rs, err := client.Do(rr)
 	if err != nil {
-		return ErrResponse(err)
+		return &dispatch.SimpleResponse{Err: ToStatusError(err)}
 	}
 	return d.adapter.ResolveResponse(rs)
 }

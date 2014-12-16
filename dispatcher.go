@@ -27,12 +27,12 @@ func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	rs := func() dispatch.Response {
 		if rr == nil {
-			return ErrResponse(statusError{http.StatusBadRequest, ""})
+			return &dispatch.SimpleResponse{Err: statusError{http.StatusBadRequest, ""}}
 		}
 
 		if d.adapter.Method(r) == MethodSend {
 			err := d.Send(rr)
-			return ErrResponse(err)
+			return &dispatch.SimpleResponse{Err: ToStatusError(err)}
 		}
 
 		// MethodCall TODO: TimeOut

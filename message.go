@@ -30,41 +30,41 @@ type statusError struct {
 	text       string
 }
 
+func (e statusError) StatusCode() int {
+	return e.statusCode
+}
+
+func (e statusError) Text() string {
+	return e.text
+}
+
 func (e statusError) Error() string {
 	return fmt.Sprintf("%s[%s]", http.StatusText(e.statusCode), e.text)
 }
 
-func ErrResponse(err error) dispatch.Response {
+func ToStatusError(err error) error {
 	if err == nil {
-		return &dispatch.SimpleResponse{}
+		return nil
 	}
 
 	if e, ok := err.(StatusError); ok {
-		return &dispatch.SimpleResponse{
-			Err: e,
-		}
+		return e
 	}
 
 	switch err.(type) {
 	case dispatch.ProtocolNotImplementError:
-		return &dispatch.SimpleResponse{
-			Err: statusError{http.StatusNotImplemented, err.Error()},
-		}
+		return statusError{http.StatusNotImplemented, err.Error()}
+
 	case dispatch.DestNotFoundError:
-		return &dispatch.SimpleResponse{
-			Err: statusError{http.StatusNotFound, err.Error()},
-		}
+		return statusError{http.StatusNotFound, err.Error()}
+
 	case dispatch.ContextCanceledError:
-		return &dispatch.SimpleResponse{
-			Err: statusError{http.StatusRequestTimeout, err.Error()},
-		}
+		return statusError{http.StatusRequestTimeout, err.Error()}
+
 	case dispatch.PanicError:
-		return &dispatch.SimpleResponse{
-			Err: statusError{http.StatusInternalServerError, err.Error()},
-		}
+		return statusError{http.StatusInternalServerError, err.Error()}
+
 	default:
-		return &dispatch.SimpleResponse{
-			Err: statusError{http.StatusInternalServerError, err.Error()},
-		}
+		return statusError{http.StatusInternalServerError, err.Error()}
 	}
 }
