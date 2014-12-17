@@ -42,6 +42,10 @@ func (e statusError) Error() string {
 	return fmt.Sprintf("%s[%s]", http.StatusText(e.statusCode), e.text)
 }
 
+func NewStatusError(statusCode int) error {
+	return statusError{statusCode, ""}
+}
+
 func ToStatusError(err error) error {
 	if err == nil {
 		return nil
