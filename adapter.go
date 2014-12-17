@@ -30,20 +30,35 @@ func (m RemoteMethod) String() string {
 }
 
 func HTTPMethod(m RemoteMethod) string {
-	if m == MethodSend {
+	switch m {
+	case MethodCall:
+		return "PUT"
+	case MethodSend:
 		return "POST"
-	} else {
+	default:
 		return "PUT"
 	}
 }
 
 func ParseMethodFromHTTP(r *http.Request) RemoteMethod {
-	if r.Method == "PUT" {
+	switch r.Method {
+	case "PUT":
+		return MethodCall
+	case "POST":
 		return MethodSend
-	} else {
+	default:
 		return MethodCall
 	}
 }
+
+const (
+	OctetStream = "application/octet-stream"
+	XProtoBuf   = "application/x-protobuf"
+	TextPlain   = "text/plain"
+
+	TimeOutKey     = "X-Dispatch-Timeout"
+	ContentTypeKey = "Content-Type"
+)
 
 func ResolveRequest(r *http.Request) dispatch.Request {
 	return &RemoteRequest{
@@ -55,27 +70,27 @@ func ResolveRequest(r *http.Request) dispatch.Request {
 
 func WriteResponse(w http.ResponseWriter, r dispatch.Response) {
 	if sink := r.Body(); sink != nil {
-		defer w.Write(sink.Bytes())
 		w.Header().Set(ContentTypeKey, ContentTypeToHTTP(sink.ContentType))
+		w.Write(sink.Bytes())
 	}
 
-	if r.Error() != nil {
-		if e, ok := r.Error().(StatusError); ok {
-			w.WriteHeader(e.StatusCode())
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	} else {
+	if r.Error() == nil {
 		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if e, ok := r.Error().(StatusError); ok {
+		w.WriteHeader(e.StatusCode())
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
 func ResolveResponse(r *http.Response) dispatch.Response {
 	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusAccepted {
 		return dispatch.NewSimpleResponse(nil, statusError{statusCode: r.StatusCode})
-	} else {
-		return dispatch.NewSimpleResponse(ParseSinkFromHTTP(r.Body, r.Header), nil)
 	}
+	return dispatch.NewSimpleResponse(ParseSinkFromHTTP(r.Body, r.Header), nil)
 }
 
 func BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error) {
@@ -135,15 +150,6 @@ func ParseTimeOutFromHTTP(r *http.Request) time.Duration {
 
 	return 0
 }
-
-const (
-	OctetStream = "application/octet-stream"
-	XProtoBuf   = "application/x-protobuf"
-	TextPlain   = "text/plain"
-
-	TimeOutKey     = "X-Dispatch-Timeout"
-	ContentTypeKey = "Content-Type"
-)
 
 func ContentTypeFromHTTP(v string) dispatch.ContentType {
 	switch v {

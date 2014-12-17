@@ -2,6 +2,7 @@ package rdispatch
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/huangml/dispatch"
 )
@@ -19,7 +20,7 @@ type RemoteDispatcher struct {
 
 func NewRemoteDispatcher(d *dispatch.Dispatcher, adapter RemoteDispatcherAdapter) *RemoteDispatcher {
 	if adapter == nil {
-		adapter = &defaultDispatcherAdapter{}
+		adapter = defaultDispatcherAdapter{}
 	}
 
 	return &RemoteDispatcher{
@@ -30,25 +31,27 @@ func NewRemoteDispatcher(d *dispatch.Dispatcher, adapter RemoteDispatcherAdapter
 
 func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rr := d.adapter.ResolveRequest(r)
+	if rr == nil {
+		d.adapter.WriteResponse(w, dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""}))
+		return
+	}
 
-	rs := func() dispatch.Response {
-		if rr == nil {
-			return dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""})
+	var rsp dispatch.Response
+	defer d.adapter.WriteResponse(w, rsp)
+
+	switch d.adapter.Method(r) {
+	case MethodCall:
+		t := time.Second * 10
+		if req, ok := rr.(*RemoteRequest); ok {
+			t = req.TimeOut
 		}
-
-		if d.adapter.Method(r) == MethodSend {
-			if err := d.Send(rr); err != nil {
-				return dispatch.NewSimpleResponse(nil, nil) // TODO: Send returns StatusAccepted.
-			} else {
-				return dispatch.NewSimpleResponse(nil, ToStatusError(err))
-			}
-		}
-
-		// MethodCall TODO: TimeOut
-		return d.Call(dispatch.NewContext(), rr)
-	}()
-
-	d.adapter.WriteResponse(w, rs)
+		rsp = d.Call(dispatch.NewContextWithTimeOut(t), rr)
+	case MethodSend:
+		err := d.Send(rr)
+		d.adapter.WriteResponse(w, dispatch.NewSimpleResponse(nil, ToStatusError(err)))
+	default:
+		d.adapter.WriteResponse(w, dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""}))
+	}
 }
 
 type defaultDispatcherAdapter struct{}
