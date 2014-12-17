@@ -37,7 +37,6 @@ func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var rsp dispatch.Response
-	defer d.adapter.WriteResponse(w, rsp)
 
 	switch d.adapter.Method(r) {
 	case MethodCall:
@@ -48,10 +47,12 @@ func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rsp = d.Call(dispatch.NewContextWithTimeOut(t), rr)
 	case MethodSend:
 		err := d.Send(rr)
-		d.adapter.WriteResponse(w, dispatch.NewSimpleResponse(nil, ToStatusError(err)))
+		rsp = dispatch.NewSimpleResponse(nil, ToStatusError(err))
 	default:
-		d.adapter.WriteResponse(w, dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""}))
+		rsp = dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""})
 	}
+
+	d.adapter.WriteResponse(w, rsp)
 }
 
 type defaultDispatcherAdapter struct{}

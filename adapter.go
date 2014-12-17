@@ -69,9 +69,15 @@ func ResolveRequest(r *http.Request) dispatch.Request {
 }
 
 func WriteResponse(w http.ResponseWriter, r dispatch.Response) {
+	if r == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	if sink := r.Body(); sink != nil {
 		w.Header().Set(ContentTypeKey, ContentTypeToHTTP(sink.ContentType))
 		w.Write(sink.Bytes())
+		return
 	}
 
 	if r.Error() == nil {
