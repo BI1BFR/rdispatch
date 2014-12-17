@@ -6,19 +6,25 @@ import (
 	"github.com/huangml/dispatch"
 )
 
-type RemoteDest struct {
-	addr    string
-	adapter RemoteDestAdapter
+type RemoteDestAdapter interface {
+	BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error)
+	ResolveResponse(r *http.Response) dispatch.Response
+	HTTPMethod(m RemoteMethod) string
 }
 
-func NewRemoteDest(addr string, adapter RemoteDestAdapter) *RemoteDest {
+type RemoteDest struct {
+	remoteAddr string
+	adapter    RemoteDestAdapter
+}
+
+func NewRemoteDest(remoteAddr string, adapter RemoteDestAdapter) *RemoteDest {
 	if adapter == nil {
-		adapter = &defaultDestAdapter{}
+		adapter = defaultDestAdapter{}
 	}
 
 	return &RemoteDest{
-		addr:    addr,
-		adapter: adapter,
+		remoteAddr: remoteAddr,
+		adapter:    adapter,
 	}
 }
 
@@ -31,11 +37,30 @@ func (d *RemoteDest) Send(r dispatch.Request) dispatch.Response {
 }
 
 func (d *RemoteDest) doRemoteRequest(r dispatch.Request, method RemoteMethod) dispatch.Response {
-	rr := d.adapter.BuildRequest(r, d.addr, method)
+	rr, err := d.adapter.BuildRequest(r, d.remoteAddr, d.adapter.HTTPMethod(method))
+	if rr == nil || err != nil {
+		return dispatch.NewSimpleResponse(nil, statusError{http.StatusInternalServerError, err.Error()})
+	}
+
 	var client http.Client
 	rs, err := client.Do(rr)
 	if err != nil {
-		return dispatch.NewSimpleResponse(nil, ToStatusError(err))
+		return dispatch.NewSimpleResponse(nil, statusError{http.StatusInternalServerError, err.Error()})
 	}
+
 	return d.adapter.ResolveResponse(rs)
+}
+
+type defaultDestAdapter struct{}
+
+func (d defaultDestAdapter) BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error) {
+	return BuildRequest(r, remoteAddr, method)
+}
+
+func (d defaultDestAdapter) ResolveResponse(r *http.Response) dispatch.Response {
+	return ResolveResponse(r)
+}
+
+func (d defaultDestAdapter) HTTPMethod(m RemoteMethod) string {
+	return HTTPMethod(m)
 }

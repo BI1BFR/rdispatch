@@ -2,6 +2,7 @@ package rdispatch
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -17,42 +18,26 @@ const (
 	MethodSend
 )
 
-type RemoteDispatcherAdapter interface {
-	Method(r *http.Request) RemoteMethod
-	ResolveRequest(r *http.Request) dispatch.Request
-	WriteResponse(w http.ResponseWriter, r dispatch.Response)
+func (m RemoteMethod) String() string {
+	switch m {
+	case MethodCall:
+		return "MethodCall"
+	case MethodSend:
+		return "MethodSend"
+	default:
+		return fmt.Sprintf("RemoteMethod(%d)", m)
+	}
 }
 
-type RemoteDestAdapter interface {
-	BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Request
-	ResolveResponse(r *http.Response) dispatch.Response
+func HTTPMethod(m RemoteMethod) string {
+	if m == MethodSend {
+		return "POST"
+	} else {
+		return "PUT"
+	}
 }
 
-type defaultDispatcherAdapter struct{}
-
-func (d defaultDispatcherAdapter) Method(r *http.Request) RemoteMethod {
-	return parseMethodFromHTTP(r)
-}
-
-func (d defaultDispatcherAdapter) ResolveRequest(r *http.Request) dispatch.Request {
-	return ResolveRequest(r)
-}
-
-func (d defaultDispatcherAdapter) WriteResponse(w http.ResponseWriter, r dispatch.Response) {
-	WriteResponse(w, r)
-}
-
-type defaultDestAdapter struct{}
-
-func (d defaultDestAdapter) BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Request {
-	return BuildRequest(r, addr, method)
-}
-
-func (d defaultDestAdapter) ResolveResponse(r *http.Response) dispatch.Response {
-	return ResolveResponse(r)
-}
-
-func parseMethodFromHTTP(r *http.Request) RemoteMethod {
+func ParseMethodFromHTTP(r *http.Request) RemoteMethod {
 	if r.Method == "PUT" {
 		return MethodSend
 	} else {
@@ -62,16 +47,16 @@ func parseMethodFromHTTP(r *http.Request) RemoteMethod {
 
 func ResolveRequest(r *http.Request) dispatch.Request {
 	return &RemoteRequest{
-		SimpleRequest: dispatch.NewSimpleRequest(r.RequestURI, r.RequestURI, parseSinkFromHTTP(r.Body, r.Header)),
-		Auth:          parseAuthFromHTTP(r),
-		TimeOut:       parseTimeOutFromHTTP(r),
+		SimpleRequest: dispatch.NewSimpleRequest(r.RequestURI, r.RequestURI, ParseSinkFromHTTP(r.Body, r.Header)),
+		Auth:          ParseAuthFromHTTP(r),
+		TimeOut:       ParseTimeOutFromHTTP(r),
 	}
 }
 
 func WriteResponse(w http.ResponseWriter, r dispatch.Response) {
 	if sink := r.Body(); sink != nil {
 		defer w.Write(sink.Bytes())
-		w.Header().Set(ContentTypeKey, contentTypeToHTTP(sink.ContentType))
+		w.Header().Set(ContentTypeKey, ContentTypeToHTTP(sink.ContentType))
 	}
 
 	if r.Error() != nil {
@@ -89,29 +74,27 @@ func ResolveResponse(r *http.Response) dispatch.Response {
 	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusAccepted {
 		return dispatch.NewSimpleResponse(nil, statusError{statusCode: r.StatusCode})
 	} else {
-		return dispatch.NewSimpleResponse(parseSinkFromHTTP(r.Body, r.Header), nil)
+		return dispatch.NewSimpleResponse(ParseSinkFromHTTP(r.Body, r.Header), nil)
 	}
 }
 
-func BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Request {
-
-	methodStr := "PUT"
-	if method == MethodSend {
-		methodStr = "POST"
-	}
-
+func BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error) {
 	sink := r.Body()
-	if sink == nil {
-		req, _ := http.NewRequest(methodStr, addr, nil)
-		return req
+
+	var buffer *bytes.Buffer
+	if sink != nil {
+		buffer = bytes.NewBuffer(sink.Bytes())
 	}
 
-	req, err := http.NewRequest(methodStr, addr, bytes.NewBuffer(sink.Bytes()))
-	if err != nil {
-		return nil
+	req, err := http.NewRequest(method, remoteAddr, buffer)
+	if err != nil || req == nil {
+		return nil, err
 	}
 
-	req.Header.Set(ContentTypeKey, contentTypeToHTTP(sink.ContentType))
+	if sink != nil {
+		req.Header.Set(ContentTypeKey, ContentTypeToHTTP(sink.ContentType))
+	}
+
 	if r, ok := r.(*RemoteRequest); ok {
 		if r.Auth != nil {
 			req.SetBasicAuth(r.Auth.UserName, r.Auth.Password)
@@ -121,21 +104,21 @@ func BuildRequest(r dispatch.Request, addr string, method RemoteMethod) *http.Re
 		}
 	}
 
-	return req
+	return req, err
 }
 
-func parseSinkFromHTTP(body io.ReadCloser, header http.Header) *dispatch.Sink {
+func ParseSinkFromHTTP(body io.ReadCloser, header http.Header) *dispatch.Sink {
 	b, err := ioutil.ReadAll(body)
 	if err != nil {
 		return nil
 	}
-	c := contentTypeFromHTTP(header.Get(ContentTypeKey))
+	c := ContentTypeFromHTTP(header.Get(ContentTypeKey))
 	s := dispatch.NewBytesSink(b)
 	s.ContentType = c
 	return s
 }
 
-func parseAuthFromHTTP(r *http.Request) *Auth {
+func ParseAuthFromHTTP(r *http.Request) *Auth {
 	if username, password, ok := r.BasicAuth(); ok {
 		return &Auth{
 			UserName: username,
@@ -145,7 +128,7 @@ func parseAuthFromHTTP(r *http.Request) *Auth {
 	return nil
 }
 
-func parseTimeOutFromHTTP(r *http.Request) time.Duration {
+func ParseTimeOutFromHTTP(r *http.Request) time.Duration {
 	if t, err := time.ParseDuration(r.Header.Get(TimeOutKey)); err == nil {
 		return t
 	}
@@ -162,7 +145,7 @@ const (
 	ContentTypeKey = "Content-Type"
 )
 
-func contentTypeFromHTTP(v string) dispatch.ContentType {
+func ContentTypeFromHTTP(v string) dispatch.ContentType {
 	switch v {
 	case OctetStream:
 		return dispatch.Bytes
@@ -175,7 +158,7 @@ func contentTypeFromHTTP(v string) dispatch.ContentType {
 	}
 }
 
-func contentTypeToHTTP(c dispatch.ContentType) string {
+func ContentTypeToHTTP(c dispatch.ContentType) string {
 	switch c {
 	case dispatch.Bytes:
 		return OctetStream

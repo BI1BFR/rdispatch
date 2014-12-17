@@ -6,6 +6,12 @@ import (
 	"github.com/huangml/dispatch"
 )
 
+type RemoteDispatcherAdapter interface {
+	Method(r *http.Request) RemoteMethod
+	ResolveRequest(r *http.Request) dispatch.Request
+	WriteResponse(w http.ResponseWriter, r dispatch.Response)
+}
+
 type RemoteDispatcher struct {
 	*dispatch.Dispatcher
 	adapter RemoteDispatcherAdapter
@@ -43,4 +49,18 @@ func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	d.adapter.WriteResponse(w, rs)
+}
+
+type defaultDispatcherAdapter struct{}
+
+func (d defaultDispatcherAdapter) Method(r *http.Request) RemoteMethod {
+	return ParseMethodFromHTTP(r)
+}
+
+func (d defaultDispatcherAdapter) ResolveRequest(r *http.Request) dispatch.Request {
+	return ResolveRequest(r)
+}
+
+func (d defaultDispatcherAdapter) WriteResponse(w http.ResponseWriter, r dispatch.Response) {
+	WriteResponse(w, r)
 }
