@@ -10,7 +10,7 @@ import (
 type RemoteDispatcherAdapter interface {
 	Method(r *http.Request) RemoteMethod
 	ResolveRequest(r *http.Request) dispatch.Request
-	WriteResponse(w http.ResponseWriter, r dispatch.Response)
+	WriteResponse(r *http.Request, w http.ResponseWriter, rsp dispatch.Response)
 }
 
 type RemoteDispatcher struct {
@@ -20,7 +20,7 @@ type RemoteDispatcher struct {
 
 func NewRemoteDispatcher(d *dispatch.Dispatcher, adapter RemoteDispatcherAdapter) *RemoteDispatcher {
 	if adapter == nil {
-		adapter = defaultDispatcherAdapter{}
+		adapter = DefaultDispatcherAdapter{}
 	}
 
 	return &RemoteDispatcher{
@@ -32,7 +32,7 @@ func NewRemoteDispatcher(d *dispatch.Dispatcher, adapter RemoteDispatcherAdapter
 func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rr := d.adapter.ResolveRequest(r)
 	if rr == nil {
-		d.adapter.WriteResponse(w, dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""}))
+		d.adapter.WriteResponse(r, w, dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""}))
 		return
 	}
 
@@ -52,19 +52,19 @@ func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rsp = dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""})
 	}
 
-	d.adapter.WriteResponse(w, rsp)
+	d.adapter.WriteResponse(r, w, rsp)
 }
 
-type defaultDispatcherAdapter struct{}
+type DefaultDispatcherAdapter struct{}
 
-func (d defaultDispatcherAdapter) Method(r *http.Request) RemoteMethod {
+func (d DefaultDispatcherAdapter) Method(r *http.Request) RemoteMethod {
 	return ParseMethodFromHTTP(r)
 }
 
-func (d defaultDispatcherAdapter) ResolveRequest(r *http.Request) dispatch.Request {
+func (d DefaultDispatcherAdapter) ResolveRequest(r *http.Request) dispatch.Request {
 	return ResolveRequest(r)
 }
 
-func (d defaultDispatcherAdapter) WriteResponse(w http.ResponseWriter, r dispatch.Response) {
-	WriteResponse(w, r)
+func (d DefaultDispatcherAdapter) WriteResponse(r *http.Request, w http.ResponseWriter, rsp dispatch.Response) {
+	WriteResponse(r, w, rsp)
 }

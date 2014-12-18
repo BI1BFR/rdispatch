@@ -68,24 +68,24 @@ func ResolveRequest(r *http.Request) dispatch.Request {
 	}
 }
 
-func WriteResponse(w http.ResponseWriter, r dispatch.Response) {
-	if r == nil {
+func WriteResponse(r *http.Request, w http.ResponseWriter, rsp dispatch.Response) {
+	if rsp == nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if sink := r.Body(); sink != nil {
+	if sink := rsp.Body(); sink != nil {
 		w.Header().Set(ContentTypeKey, ContentTypeToHTTP(sink.ContentType))
 		w.Write(sink.Bytes())
 		return
 	}
 
-	if r.Error() == nil {
+	if rsp.Error() == nil {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	if e, ok := r.Error().(StatusError); ok {
+	if e, ok := rsp.Error().(StatusError); ok {
 		w.WriteHeader(e.StatusCode())
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -19,7 +19,7 @@ type RemoteDest struct {
 
 func NewRemoteDest(remoteAddr string, adapter RemoteDestAdapter) *RemoteDest {
 	if adapter == nil {
-		adapter = defaultDestAdapter{}
+		adapter = DefaultDestAdapter{}
 	}
 
 	return &RemoteDest{
@@ -29,38 +29,44 @@ func NewRemoteDest(remoteAddr string, adapter RemoteDestAdapter) *RemoteDest {
 }
 
 func (d *RemoteDest) Call(ctx *dispatch.Context, r dispatch.Request) dispatch.Response {
-	return d.doRemoteRequest(r, MethodCall)
+	rsp, err := d.doRemoteRequest(r, MethodCall)
+	if err != nil {
+		return dispatch.NewSimpleResponse(nil, ToStatusError(err))
+	} else {
+		return rsp
+	}
 }
 
-func (d *RemoteDest) Send(r dispatch.Request) dispatch.Response {
-	return d.doRemoteRequest(r, MethodSend)
+func (d *RemoteDest) Send(r dispatch.Request) error {
+	_, err := d.doRemoteRequest(r, MethodSend)
+	return err
 }
 
-func (d *RemoteDest) doRemoteRequest(r dispatch.Request, method RemoteMethod) dispatch.Response {
+func (d *RemoteDest) doRemoteRequest(r dispatch.Request, method RemoteMethod) (dispatch.Response, error) {
 	rr, err := d.adapter.BuildRequest(r, d.remoteAddr, d.adapter.HTTPMethod(method))
 	if rr == nil || err != nil {
-		return dispatch.NewSimpleResponse(nil, statusError{http.StatusInternalServerError, err.Error()})
+		return nil, err
 	}
 
 	var client http.Client
 	rs, err := client.Do(rr)
 	if err != nil {
-		return dispatch.NewSimpleResponse(nil, statusError{http.StatusInternalServerError, err.Error()})
+		return nil, err
 	}
 
-	return d.adapter.ResolveResponse(rs)
+	return d.adapter.ResolveResponse(rs), nil
 }
 
-type defaultDestAdapter struct{}
+type DefaultDestAdapter struct{}
 
-func (d defaultDestAdapter) BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error) {
+func (d DefaultDestAdapter) BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error) {
 	return BuildRequest(r, remoteAddr, method)
 }
 
-func (d defaultDestAdapter) ResolveResponse(r *http.Response) dispatch.Response {
+func (d DefaultDestAdapter) ResolveResponse(r *http.Response) dispatch.Response {
 	return ResolveResponse(r)
 }
 
-func (d defaultDestAdapter) HTTPMethod(m RemoteMethod) string {
+func (d DefaultDestAdapter) HTTPMethod(m RemoteMethod) string {
 	return HTTPMethod(m)
 }
