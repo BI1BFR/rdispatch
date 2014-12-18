@@ -32,7 +32,7 @@ func NewRemoteDispatcher(d *dispatch.Dispatcher, adapter RemoteDispatcherAdapter
 func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rr := d.adapter.ResolveRequest(r)
 	if rr == nil {
-		d.adapter.WriteResponse(r, w, dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""}))
+		d.adapter.WriteResponse(r, w, dispatch.SimpleResponse(nil, statusError{http.StatusBadRequest, ""}))
 		return
 	}
 
@@ -47,9 +47,9 @@ func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rsp = d.Call(dispatch.NewContextWithTimeOut(t), rr)
 	case MethodSend:
 		err := d.Send(rr)
-		rsp = dispatch.NewSimpleResponse(nil, ToStatusError(err))
+		rsp = dispatch.SimpleResponse(nil, ToStatusError(err))
 	default:
-		rsp = dispatch.NewSimpleResponse(nil, statusError{http.StatusBadRequest, ""})
+		rsp = dispatch.SimpleResponse(nil, statusError{http.StatusBadRequest, ""})
 	}
 
 	d.adapter.WriteResponse(r, w, rsp)

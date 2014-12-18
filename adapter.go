@@ -55,6 +55,7 @@ func ParseMethodFromHTTP(r *http.Request) RemoteMethod {
 
 const (
 	OctetStream = "application/octet-stream"
+	Json        = "application/json"
 	XProtoBuf   = "application/x-protobuf"
 	TextPlain   = "text/plain"
 
@@ -64,9 +65,9 @@ const (
 
 func ResolveRequest(r *http.Request) dispatch.Request {
 	return &RemoteRequest{
-		SimpleRequest: dispatch.NewSimpleRequest(r.RequestURI, r.RequestURI, ParseSinkFromHTTP(r.Body, r.Header)),
-		Auth:          ParseAuthFromHTTP(r),
-		TimeOut:       ParseTimeOutFromHTTP(r),
+		Request: dispatch.SimpleRequest(r.RequestURI, r.RequestURI, ParseSinkFromHTTP(r.Body, r.Header)),
+		Auth:    ParseAuthFromHTTP(r),
+		TimeOut: ParseTimeOutFromHTTP(r),
 	}
 }
 
@@ -95,10 +96,10 @@ func WriteResponse(r *http.Request, w http.ResponseWriter, rsp dispatch.Response
 }
 
 func ResolveResponse(r *http.Response) dispatch.Response {
-	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusAccepted {
-		return dispatch.NewSimpleResponse(nil, statusError{statusCode: r.StatusCode})
+	if r.StatusCode != http.StatusOK {
+		return dispatch.SimpleResponse(nil, statusError{statusCode: r.StatusCode})
 	}
-	return dispatch.NewSimpleResponse(ParseSinkFromHTTP(r.Body, r.Header), nil)
+	return dispatch.SimpleResponse(ParseSinkFromHTTP(r.Body, r.Header), nil)
 }
 
 func BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error) {
@@ -138,12 +139,9 @@ func BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.R
 }
 
 func ParseSinkFromHTTP(body io.ReadCloser, header http.Header) *dispatch.Sink {
-	b, err := ioutil.ReadAll(body)
-	if err != nil {
-		return nil
-	}
+	b, _ := ioutil.ReadAll(body)
 	c := ContentTypeFromHTTP(header.Get(ContentTypeKey))
-	s := dispatch.NewBytesSink(b)
+	s := dispatch.BytesSink(b)
 	s.ContentType = c
 	return s
 }
@@ -172,8 +170,10 @@ func ContentTypeFromHTTP(v string) dispatch.ContentType {
 		return dispatch.Bytes
 	case TextPlain:
 		return dispatch.Text
+	case Json:
+		return dispatch.Json
 	case XProtoBuf:
-		return dispatch.ProtoBuf
+		return dispatch.Protobuf
 	default:
 		return dispatch.Bytes
 	}
@@ -185,7 +185,9 @@ func ContentTypeToHTTP(c dispatch.ContentType) string {
 		return OctetStream
 	case dispatch.Text:
 		return TextPlain
-	case dispatch.ProtoBuf:
+	case dispatch.Json:
+		return Json
+	case dispatch.Protobuf:
 		return XProtoBuf
 	default:
 		return OctetStream

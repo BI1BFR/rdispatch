@@ -31,7 +31,7 @@ func NewRemoteDest(remoteAddr string, adapter RemoteDestAdapter) *RemoteDest {
 func (d *RemoteDest) Call(ctx *dispatch.Context, r dispatch.Request) dispatch.Response {
 	rsp, err := d.doRemoteRequest(r, MethodCall)
 	if err != nil {
-		return dispatch.NewSimpleResponse(nil, ToStatusError(err))
+		return dispatch.SimpleResponse(nil, ToStatusError(err))
 	} else {
 		return rsp
 	}
