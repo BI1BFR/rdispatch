@@ -2,6 +2,7 @@ package rdispatch
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/huangml/dispatch"
+	"github.com/huangml/mux"
 )
 
 type RemoteMethod int
@@ -100,6 +102,13 @@ func ResolveResponse(r *http.Response) dispatch.Response {
 }
 
 func BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.Request, error) {
+	if remoteAddr == "" {
+		return nil, errors.New("invalid remoteAddr")
+	}
+	if remoteAddr[len(remoteAddr)-1] == '/' {
+		remoteAddr = remoteAddr[:len(remoteAddr)-1]
+	}
+
 	sink := r.Body()
 
 	var buffer *bytes.Buffer
@@ -107,7 +116,7 @@ func BuildRequest(r dispatch.Request, remoteAddr string, method string) (*http.R
 		buffer = bytes.NewBuffer(sink.Bytes())
 	}
 
-	req, err := http.NewRequest(method, remoteAddr, buffer)
+	req, err := http.NewRequest(method, remoteAddr+mux.PathTrim(r.Address()), buffer)
 	if err != nil || req == nil {
 		return nil, err
 	}
