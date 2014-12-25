@@ -41,7 +41,7 @@ func (d *RemoteDispatcher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch d.adapter.Method(r) {
 	case MethodCall:
 		t := time.Second * 10
-		if req, ok := rr.(*RemoteRequest); ok {
+		if req, ok := rr.(*RemoteRequest); ok && req.TimeOut != 0 {
 			t = req.TimeOut
 		}
 		rsp = d.Call(dispatch.NewContextWithTimeOut(t), rr)
